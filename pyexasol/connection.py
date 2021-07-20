@@ -75,6 +75,7 @@ class ExaConnection(object):
             , websocket_sslopt=None
             , access_token=None
             , refresh_token=None
+            , python_executable=None
             ):
         """
         Exasol connection object
@@ -110,6 +111,7 @@ class ExaConnection(object):
         :param websocket_sslopt: Set custom SSL options for WebSocket client (Default: None)
         :param access_token: OpenID access token to use for the login process
         :param refresh_token: OpenID refresh token to use for the login process
+        :param python_executable: Path to the Python executable
         """
 
         self.options = {
@@ -153,6 +155,7 @@ class ExaConnection(object):
 
             'access_token': access_token,
             'refresh_token': refresh_token,
+            'python_executable': python_executable,
         }
 
         self.login_info = {}
@@ -306,7 +309,9 @@ class ExaConnection(object):
         if query_params is not None:
             query_or_table = self.format.format(query_or_table, **query_params)
 
-        http_proc = ExaHTTPProcess(self.ws_host, self.ws_port, compression, self.options['encryption'], HTTP_EXPORT)
+        python_executable = self.options['python_executable']
+
+        http_proc = ExaHTTPProcess(self.ws_host, self.ws_port, compression, self.options['encryption'], HTTP_EXPORT, python_executable)
         sql_thread = ExaSQLExportThread(self, compression, query_or_table, export_params)
 
         try:
@@ -360,7 +365,9 @@ class ExaConnection(object):
         if not callable(callback):
             raise ValueError('Callback argument is not callable')
 
-        http_proc = ExaHTTPProcess(self.ws_host, self.ws_port, compression, self.options['encryption'], HTTP_IMPORT)
+        python_executable = self.options['python_executable']
+
+        http_proc = ExaHTTPProcess(self.ws_host, self.ws_port, compression, self.options['encryption'], HTTP_IMPORT, python_executable)
         sql_thread = ExaSQLImportThread(self, compression, table, import_params)
 
         try:

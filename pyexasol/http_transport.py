@@ -212,12 +212,13 @@ class ExaHTTPProcess(object):
     HTTP communication and compression / decompression is offloaded to sub-process
     It communicates with main process using pipes
     """
-    def __init__(self, host, port, compression, encryption, mode):
+    def __init__(self, host, port, compression, encryption, mode, python_executable):
         self.host = host
         self.port = port
         self.compression = compression
         self.encryption = encryption
         self.mode = mode
+        self.python_executable = python_executable
 
         self.server = None
         self.proxy = None
@@ -226,8 +227,16 @@ class ExaHTTPProcess(object):
         self.read_pipe = None
         self.write_pipe = None
 
+        
+
     def start(self):
-        args = [sys.executable,
+
+        python_executable = sys.executable
+
+        if self.python_executable:
+            python_executable = self.python_executable        
+
+        args = [python_executable,
                 '-m', 'pyexasol_utils.http_transport',
                 '--host', self.host,
                 '--port', str(self.port),
