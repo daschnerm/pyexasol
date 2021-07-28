@@ -25,7 +25,7 @@ class ExaLogger(logging.Logger):
         else:
             handler = logging.NullHandler()
 
-        formatter = logging.Formatter('%(asctime)s %(message)s')
+        formatter = logging.Formatter('%(asctime)s %(thread)d %(funcName)s %(lineno)d %(message)s')
         formatter.default_msec_format = '%s.%03d'
 
         handler.setFormatter(formatter)

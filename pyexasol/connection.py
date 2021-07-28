@@ -62,8 +62,8 @@ class ExaConnection(object):
             , quote_ident=False
             , json_lib='json'
             , verbose_error=True
-            , debug=False
-            , debug_logdir=None
+            , debug=True
+            , debug_logdir='/tmp'
             , udf_output_bind_address=None
             , udf_output_connect_address=None
             , udf_output_dir=None
@@ -273,6 +273,8 @@ class ExaConnection(object):
         return self.export_to_callback(cb.export_to_list, None, query_or_table, query_params, None, export_params)
 
     def export_to_pandas(self, query_or_table, query_params=None, callback_params=None, export_params=None):
+        self.logger.debug('[Calling export_to_pandas]')
+
         if not export_params:
             export_params = {}
 
@@ -290,6 +292,8 @@ class ExaConnection(object):
         return self.import_from_callback(cb.import_from_pandas, src, table, callback_params, import_params)
 
     def export_to_callback(self, callback, dst, query_or_table, query_params=None, callback_params=None, export_params=None):
+        self.logger.debug('[Calling export_to_callback]')
+
         from .http_transport import ExaSQLExportThread, ExaHTTPProcess, HTTP_EXPORT
 
         if not callable(callback):
@@ -311,37 +315,49 @@ class ExaConnection(object):
 
         python_executable = self.options['python_executable']
 
+        self.logger.debug('[Instantiating ExaHTTPProcess]')
         http_proc = ExaHTTPProcess(self.ws_host, self.ws_port, compression, self.options['encryption'], HTTP_EXPORT, python_executable)
+        self.logger.debug('[Instantiating ExaSQLExportThread]')
         sql_thread = ExaSQLExportThread(self, compression, query_or_table, export_params)
 
         try:
+            self.logger.debug('[Starting ExaHTTPProcess]')
             http_proc.start()
 
             sql_thread.set_http_proc(http_proc)
             sql_thread.set_exa_proxy_list(http_proc.get_proxy())
-
+            self.logger.debug('[Starting ExaSQLExportThread]')
             sql_thread.start()
 
+            self.logger.debug('[Getting result callback]')
             result = callback(http_proc.read_pipe, dst, **callback_params)
             http_proc.read_pipe.close()
-
+            
+            self.logger.debug('[Joining threads]')
             http_proc.join_with_exc()
             sql_thread.join_with_exc()
 
+            self.logger.debug('[Joined threads]')
+
             return result
         except Exception as e:
+
+            self.logger.debug('[Exception: Terminating HTTP Server]')
             # Terminate HTTP Server if it is still running
             http_proc.terminate()
             http_proc.join()
 
+            self.logger.debug('[Exception: Joining SQL Thread]')
             # Try to join SQL thread, but no longer than 1 second
             sql_thread.join(1)
 
             # If SQL thread is still running somehow, abort query and join again
             if sql_thread.is_alive():
+                self.logger.debug('[Exception: Aborting query, trying again]')
                 self.abort_query()
                 sql_thread.join()
 
+            self.logger.debug('[Re-Raising exception]')
             # Give higher priority to SQL thread exception
             if sql_thread.exc:
                 raise sql_thread.exc
@@ -538,6 +554,11 @@ class ExaConnection(object):
         self.ws_req_count += 1
         local_req_count = self.ws_req_count
 
+        import traceback
+        stack_info = traceback.format_stack()
+
+        self.logger.debug(str(stack_info))
+
         # Build request
         send_data = self.json_encode(req)
         self.logger.debug_json(f'WebSocket request #{local_req_count}', req)
@@ -557,6 +578,7 @@ class ExaConnection(object):
 
             self.ws_req_time = time.time() - start_ts
         except (websocket.WebSocketException, ConnectionError) as e:
+            self.logger.debug("req(): Error in response")
             self.close(disconnect=False)
             raise ExaCommunicationError(self, str(e))
         finally:
@@ -571,9 +593,11 @@ class ExaConnection(object):
             self.attr = {**self.attr, **ret['attributes']}
 
         if ret['status'] == 'ok':
+            self.logger.debug("status ok in req()")
             return ret
 
         if ret['status'] == 'error':
+            self.logger.debug("status error in req()")
             # Special treatment for "execute" command to prevent very long tracebacks in most common cases
             if req.get('command') in ['execute', 'createPreparedStatement']:
                 if ret['exception']['sqlCode'] == 'R0001':
@@ -583,10 +607,14 @@ class ExaConnection(object):
                 else:
                     cls_err = ExaQueryError
 
+                self.logger.debug("req(): status error, raising " + str(cls_err))
+
                 raise cls_err(self, req['sqlText'], ret['exception']['sqlCode'], ret['exception']['text'])
             elif req.get('username') is not None:
+                self.logger.debug("req(): ExaAuthError")
                 raise ExaAuthError(self, ret['exception']['sqlCode'], ret['exception']['text'])
             else:
+                self.logger.debug("req(): ExaRequestError")
                 raise ExaRequestError(self, ret['exception']['sqlCode'], ret['exception']['text'])
 
     def abort_query(self):
