@@ -248,6 +248,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Start TCP server
+    print("Starting ExaTCPServer")
     server = ExaTCPServer((args.host, args.port)
                           , ExaHTTPRequestHandler
                           , compression=args.compression, encryption=args.encryption)
