@@ -1,9 +1,12 @@
 language: python
 
 cache: pip
+dist: bionic
 
 matrix:
     include:
+        -   python: 3.6
+            env: EXASOL_TAG=latest-7.1 EXASOL_PORT=8563
         -   python: 3.6
             env: EXASOL_TAG=latest-7.0 EXASOL_PORT=8563
         -   python: 3.6
@@ -12,7 +15,7 @@ matrix:
             env: EXASOL_TAG=6.0.16-d1 EXASOL_PORT=8888
 
         -   python: 3.9
-            env: EXASOL_TAG=latest-7.0 EXASOL_PORT=8563
+            env: EXASOL_TAG=latest-7.1 EXASOL_PORT=8563
 
 services:
   - docker
@@ -27,7 +30,7 @@ before_install:
     - docker run --detach --name exasol --privileged -p 127.0.0.1:8563:$EXASOL_PORT exasol/docker-db:$EXASOL_TAG
 
 install:
-    - sleep 120
+    - sleep 240
     - docker logs exasol
 
     - pip install -e .[pandas,encrypt,ujson,rapidjson,examples]
